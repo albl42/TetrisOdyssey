@@ -2,6 +2,9 @@
 
 A modern take on the classic Tetris game, built with TypeScript and HTML5 Canvas. This project serves as a foundation for a roguelike Tetris game, combining the familiar block-dropping mechanics with roguelike elements.
 
+## Play Online
+You can play the game online at: [https://[your-username].github.io/TetrisOdyssey](https://[your-username].github.io/TetrisOdyssey)
+
 ## Features
 
 ### Current Implementation
@@ -26,6 +29,8 @@ A modern take on the classic Tetris game, built with TypeScript and HTML5 Canvas
 - HTML5 Canvas
 - Modern JavaScript (ES2020)
 - Node.js and npm for development
+- GitHub Actions for CI/CD
+- GitHub Pages for hosting
 
 ### Project Structure
 ```
@@ -47,7 +52,7 @@ TetrisOdyssey/
 - Node.js (v14 or higher)
 - npm (comes with Node.js)
 
-### Installation
+### Local Development
 1. Clone the repository:
    ```bash
    git clone [repository-url]
@@ -89,6 +94,12 @@ TetrisOdyssey/
 2. Import and use them in existing files
 3. Run `npm run build` to compile
 4. Test your changes in the browser
+
+### Deployment
+The game is automatically deployed to GitHub Pages when changes are pushed to the main branch. The deployment process:
+1. Builds the project using TypeScript
+2. Uploads the built files to GitHub Pages
+3. Makes the game available at `https://albl42.github.io/TetrisOdyssey`
 
 ## Contributing
 Contributions are welcome! Please feel free to submit a Pull Request.
