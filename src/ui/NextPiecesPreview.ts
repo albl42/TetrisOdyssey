@@ -1,5 +1,9 @@
-import { Tetromino, TetrominoType } from './Tetromino.js';
+import { Tetromino } from '../tetromino/Tetromino.js';
 
+/**
+ * UI component that displays the next Tetromino pieces that will appear in the game.
+ * This class handles the rendering of the preview pieces.
+ */
 export class NextPiecesPreview {
     private container: HTMLElement;
     private previews: Tetromino[];
@@ -14,7 +18,15 @@ export class NextPiecesPreview {
     private createContainer(): HTMLElement {
         const container = document.createElement('div');
         container.className = 'next-pieces-preview';
-        container.innerHTML = '<h3>Next Pieces</h3>';
+        
+        const title = document.createElement('h3');
+        title.textContent = 'Next Pieces';
+        container.appendChild(title);
+        
+        const previewContainer = document.createElement('div');
+        previewContainer.className = 'preview-container';
+        container.appendChild(previewContainer);
+        
         return container;
     }
 
@@ -24,14 +36,16 @@ export class NextPiecesPreview {
     }
 
     private render(): void {
-        // Clear existing previews
-        const existingPreviews = this.container.querySelectorAll('.piece-preview');
-        existingPreviews.forEach(preview => preview.remove());
-
+        const previewContainer = this.container.querySelector('.preview-container');
+        if (!previewContainer) return;
+        
+        // Clear previous previews
+        previewContainer.innerHTML = '';
+        
         // Create new previews
         this.previews.forEach((piece, index) => {
             const preview = this.createPiecePreview(piece, index);
-            this.container.appendChild(preview);
+            previewContainer.appendChild(preview);
         });
     }
 

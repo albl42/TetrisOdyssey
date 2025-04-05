@@ -1,255 +1,322 @@
 import { Board } from './Board.js';
-import { Tetromino, TetrominoType } from './Tetromino.js';
-import { GameFeatures } from './GameFeatures.js';
-import { FeaturePanel } from './FeaturePanel.js';
-import { NextPiecesPreview } from './NextPiecesPreview.js';
-import { GameOverScreen } from './GameOverScreen.js';
+import { Tetromino } from './tetromino/Tetromino.js';
+import { TetrominoType } from './tetromino/TetrominoType.js';
+import { FeatureManager } from './features/FeatureManager.js';
+import { FeaturePanel } from './ui/FeaturePanel.js';
+import { NextPiecesPreview } from './ui/NextPiecesPreview.js';
+import { GameOverScreen } from './ui/GameOverScreen.js';
+import { TetrominoGenerator } from './tetromino/TetrominoGenerator.js';
+import { Controls } from './Controls.js';
+import { GameLoop } from './GameLoop.js';
+import { GameState } from './GameState.js';
+import { GhostPieceFeature } from './features/GhostPieceFeature.js';
+import { SpeedControlFeature } from './features/SpeedControlFeature.js';
+import { Layout } from './ui/Layout.js';
+import { Renderer } from './Renderer.js';
+import { InputHandler } from './InputHandler.js';
 
 export class Game {
     private board: Board;
-    private currentPiece!: Tetromino;
-    private nextPieces: Tetromino[];
-    private score: number;
-    private gameOver: boolean;
     private canvas: HTMLCanvasElement;
     private ctx: CanvasRenderingContext2D;
-    private blockSize: number;
-    private dropInterval: number;
-    private lastDropTime: number;
-    private features: GameFeatures;
+    private blockSize: number = 30;
+    private featureManager: FeatureManager;
     private featurePanel: FeaturePanel;
     private nextPiecesPreview: NextPiecesPreview;
     private gameOverScreen: GameOverScreen;
+    private tetrominoGenerator: TetrominoGenerator;
+    private controls: Controls;
+    private gameState: GameState;
+    private gameLoop: GameLoop;
+    private layout: Layout;
+    private renderer: Renderer;
+    private scale: number = 1;
 
     constructor() {
         console.log('Initializing game...');
-        this.board = new Board();
-        this.score = 0;
-        this.gameOver = false;
-        this.canvas = document.getElementById('gameCanvas') as HTMLCanvasElement;
+        
+        // Initialize layout
+        this.layout = new Layout();
+        document.body.appendChild(this.layout.getElement());
+        console.log('Layout added to document body');
+        
+        // Prevent spacebar from scrolling
+        document.addEventListener('keydown', (event) => {
+            if (event.code === 'Space') {
+                event.preventDefault();
+            }
+        });
+        
+        // Get the canvas from the layout
+        this.canvas = this.layout.getCanvas();
+        console.log('Canvas retrieved from layout:', this.canvas);
+        
+        // Get canvas context
         const context = this.canvas.getContext('2d');
         if (!context) {
             throw new Error('Could not get 2D context from canvas');
         }
         this.ctx = context;
-        this.blockSize = 30;
-        this.dropInterval = 1000; // 1 second between drops
-        this.lastDropTime = 0;
-        this.nextPieces = [];
+        console.log('Canvas context obtained');
         
-        // Initialize features and panels
-        this.features = new GameFeatures();
-        this.featurePanel = new FeaturePanel(this.features.getAllFeatures(), 'left');
+        // Calculate initial scale
+        this.updateScale();
+        
+        // Initialize game components
+        this.board = new Board();
+        this.tetrominoGenerator = new TetrominoGenerator();
+        console.log('Board and tetromino generator initialized');
+        
+        // Initialize feature manager first
+        this.featureManager = new FeatureManager();
+        console.log('Feature manager initialized');
+        
+        // Initialize game state
+        this.gameState = new GameState(
+            this.board,
+            this.tetrominoGenerator,
+            (score) => this.updateScoreDisplay(score),
+            (score) => this.handleGameOver(score),
+            (interval) => this.gameLoop.setDropInterval(interval),
+            this.featureManager
+        );
+        console.log('Game state initialized');
+        
+        // Initialize feature manager with game state
+        this.featureManager.initialize(this.gameState);
+        
+        // Initialize game loop
+        this.gameLoop = new GameLoop(
+            this.gameState,
+            this.featureManager,
+            () => this.draw()
+        );
+        console.log('Game loop initialized');
+        
+        // Initialize UI components
+        this.featurePanel = new FeaturePanel();
+        this.featurePanel.initializeControls(this.featureManager.getAllFeatures());
         this.nextPiecesPreview = new NextPiecesPreview(this.blockSize);
         this.gameOverScreen = new GameOverScreen(() => this.restart());
         
-        // Add panels to the game container
-        const gameContainer = document.getElementById('game-container');
-        if (gameContainer) {
-            gameContainer.appendChild(this.featurePanel.getElement());
-            gameContainer.appendChild(this.nextPiecesPreview.getElement());
-        }
+        // Initialize controls with proper callbacks
+        this.controls = new Controls(
+            this.board,
+            this.featureManager,
+            () => this.draw(),
+            () => this.hardDrop()
+        );
+        console.log('Controls initialized');
         
-        console.log('Canvas initialized:', this.canvas.width, 'x', this.canvas.height);
-        this.initializeNextPieces();
-        this.spawnPiece();
-        this.setupControls();
-        this.draw(); // Draw initial state
-        this.update(0); // Start game loop
-    }
-
-    private initializeNextPieces(): void {
-        // Generate 3 next pieces
-        for (let i = 0; i < 3; i++) {
-            this.nextPieces.push(this.generateRandomPiece());
-        }
-        this.nextPiecesPreview.updatePreviews(this.nextPieces);
-    }
-
-    private generateRandomPiece(): Tetromino {
-        const types: TetrominoType[] = ['I', 'J', 'L', 'O', 'S', 'T', 'Z'];
-        const randomType = types[Math.floor(Math.random() * types.length)];
-        return new Tetromino(randomType);
-    }
-
-    private spawnPiece(): void {
-        if (this.nextPieces.length === 0) {
-            this.initializeNextPieces();
-        }
+        // Initialize renderer
+        this.renderer = new Renderer(this.canvas);
+        console.log('Renderer initialized');
         
-        this.currentPiece = this.nextPieces.shift()!;
-        this.currentPiece.setPosition(3, 0);
+        // Add panels to the sidebar
+        const sidebar = this.layout.getSidebar();
+        sidebar.appendChild(this.featurePanel.getElement());
+        sidebar.appendChild(this.nextPiecesPreview.getElement());
+        console.log('Panels added to sidebar');
         
-        // Check if the new piece can be placed
-        if (!this.board.isValidMove(this.currentPiece, this.currentPiece.getX(), this.currentPiece.getY())) {
-            this.gameOver = true;
-            return; // Don't spawn new pieces if game is over
-        }
+        // Add game over screen to the main content area
+        const mainContent = this.layout.getMainContent();
+        mainContent.appendChild(this.gameOverScreen.getElement());
+        console.log('Game over screen added to main content');
         
-        // Add a new piece to the queue
-        this.nextPieces.push(this.generateRandomPiece());
-        this.nextPiecesPreview.updatePreviews(this.nextPieces);
+        console.log('Canvas dimensions:', this.canvas.width, 'x', this.canvas.height);
+        
+        // Start the game loop
+        this.gameLoop.start();
+        console.log('Game loop started');
+        
+        console.log('Game initialization complete');
     }
 
-    private setupControls(): void {
-        document.addEventListener('keydown', (event) => {
-            if (this.gameOver) return;
-
-            switch (event.key) {
-                case 'ArrowLeft':
-                    if (this.board.isValidMove(this.currentPiece, this.currentPiece.getX() - 1, this.currentPiece.getY())) {
-                        this.currentPiece.moveLeft();
-                    }
-                    break;
-                case 'ArrowRight':
-                    if (this.board.isValidMove(this.currentPiece, this.currentPiece.getX() + 1, this.currentPiece.getY())) {
-                        this.currentPiece.moveRight();
-                    }
-                    break;
-                case 'ArrowDown':
-                    if (this.board.isValidMove(this.currentPiece, this.currentPiece.getX(), this.currentPiece.getY() + 1)) {
-                        this.currentPiece.moveDown();
-                    }
-                    break;
-                case 'ArrowUp':
-                    this.currentPiece.rotate();
-                    if (!this.board.isValidMove(this.currentPiece, this.currentPiece.getX(), this.currentPiece.getY())) {
-                        this.currentPiece.rotate();
-                        this.currentPiece.rotate();
-                        this.currentPiece.rotate();
-                    }
-                    break;
-                case ' ': // Space bar for hard drop
-                    if (this.features.isFeatureActive('hard-drop')) {
-                        this.hardDrop();
-                    }
-                    break;
-            }
-            this.draw();
-        });
+    private updateScale(): void {
+        // Calculate scale based on canvas size vs ideal size
+        const idealWidth = 10 * this.blockSize;  // 10 blocks wide
+        const idealHeight = 20 * this.blockSize; // 20 blocks high
+        
+        this.scale = Math.min(
+            this.canvas.width / idealWidth,
+            this.canvas.height / idealHeight
+        );
+        
+        console.log('Canvas scale updated:', this.scale);
     }
 
-    private update(currentTime: number): void {
-        if (this.gameOver) {
-            this.drawGameOver();
-            return;
+    private drawTestPattern(): void {
+        console.log('Drawing test pattern...');
+        // Draw a test pattern to verify canvas is working
+        this.ctx.fillStyle = '#FF0000';
+        this.ctx.fillRect(0, 0, this.blockSize, this.blockSize);
+        this.ctx.fillStyle = '#00FF00';
+        this.ctx.fillRect(this.blockSize, 0, this.blockSize, this.blockSize);
+        this.ctx.fillStyle = '#0000FF';
+        this.ctx.fillRect(0, this.blockSize, this.blockSize, this.blockSize);
+        console.log('Test pattern drawn with colors: red, green, blue');
+    }
+
+    private handleGameOver(score: number): void {
+        console.log('Game Over! Score:', score);
+        this.gameOverScreen.show(score);
+    }
+
+    private updateScoreDisplay(score: number): void {
+        const scoreElement = document.getElementById('score');
+        if (scoreElement) {
+            scoreElement.textContent = `Score: ${score}`;
         }
-
-        // Handle automatic dropping
-        if (currentTime - this.lastDropTime > this.dropInterval) {
-            if (this.board.isValidMove(this.currentPiece, this.currentPiece.getX(), this.currentPiece.getY() + 1)) {
-                this.currentPiece.moveDown();
-            } else {
-                this.board.placePiece(this.currentPiece);
-                const linesCleared = this.board.clearLines();
-                this.updateScore(linesCleared);
-                this.spawnPiece();
-            }
-            this.lastDropTime = currentTime;
-        }
-
-        this.draw();
-        requestAnimationFrame(this.update.bind(this));
-    }
-
-    private updateScore(linesCleared: number): void {
-        const points = [0, 100, 300, 500, 800];
-        this.score += points[linesCleared];
-        document.getElementById('score')!.textContent = `Score: ${this.score}`;
     }
 
     private draw(): void {
+        console.log('Drawing game state...');
+        
+        // Update scale before drawing
+        this.updateScale();
+        
+        // Clear the canvas
         this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+        console.log('Canvas cleared');
+        
+        // Draw the board
+        this.drawBoard();
+        console.log('Board drawn');
+        
+        // Draw ghost piece if enabled
+        if (this.featureManager.isFeatureActive('ghost-piece')) {
+            this.drawGhostPiece();
+            console.log('Ghost piece drawn');
+        }
+        
+        // Update next pieces preview
+        this.nextPiecesPreview.updatePreviews(this.gameState.getNextPieces());
+        console.log('Next pieces preview updated');
 
-        // Draw board
+        // Update feature panel
+        this.featurePanel.update();
+        console.log('Feature panel updated');
+    }
+
+    private drawBoard(): void {
+        // Draw the board grid
         const grid = this.board.getGrid();
         const colors = this.board.getColors();
         
-        for (let row = 0; row < grid.length; row++) {
-            for (let col = 0; col < grid[row].length; col++) {
-                if (grid[row][col]) {
-                    this.drawBlock(col, row, colors[row][col]);
+        for (let y = 0; y < grid.length; y++) {
+            for (let x = 0; x < grid[y].length; x++) {
+                if (grid[y][x] === 1) {
+                    this.drawBlock(x, y, colors[y][x]);
                 }
             }
         }
-
-        // Draw ghost piece if enabled
-        if (this.features.isFeatureActive('ghost-piece')) {
-            this.drawGhostPiece();
+        
+        // Draw the current piece
+        const currentPiece = this.board.getCurrentPiece();
+        if (currentPiece) {
+            const { tetromino, x, y } = currentPiece;
+            this.drawTetromino(tetromino, x, y);
         }
-
-        // Draw current piece
-        for (let row = 0; row < this.currentPiece.shape.length; row++) {
-            for (let col = 0; col < this.currentPiece.shape[row].length; col++) {
-                if (this.currentPiece.shape[row][col]) {
-                    this.drawBlock(this.currentPiece.getX() + col, this.currentPiece.getY() + row, this.currentPiece.color);
-                }
-            }
+    }
+    
+    private drawGhostPiece(): void {
+        const ghostPieceFeature = this.featureManager.getFeature<GhostPieceFeature>('ghost-piece');
+        if (!ghostPieceFeature) return;
+        
+        const ghostPiece = ghostPieceFeature.getGhostPiece();
+        if (ghostPiece) {
+            const { tetromino, x, y } = ghostPiece;
+            this.drawTetromino(tetromino, x, y);
         }
     }
 
     private drawBlock(x: number, y: number, color: string): void {
+        const scaledX = x * this.blockSize * this.scale;
+        const scaledY = y * this.blockSize * this.scale;
+        const scaledSize = this.blockSize * this.scale;
+        
         this.ctx.fillStyle = color;
-        this.ctx.fillRect(x * this.blockSize, y * this.blockSize, this.blockSize - 1, this.blockSize - 1);
+        this.ctx.fillRect(scaledX, scaledY, scaledSize, scaledSize);
+        
+        // Draw block border
+        this.ctx.strokeStyle = '#000';
+        this.ctx.strokeRect(scaledX, scaledY, scaledSize, scaledSize);
     }
 
-    private drawGhostPiece(): void {
-        // Create a ghost piece with the same type as the current piece
-        const ghostPiece = new Tetromino(this.currentPiece.getType());
-        ghostPiece.color = 'rgba(255, 255, 255, 0.3)';
+    private drawTetromino(tetromino: Tetromino, x: number, y: number): void {
+        const shape = tetromino.shape;
+        const color = tetromino.color;
         
-        // Copy the current piece's shape to maintain rotation
-        ghostPiece.shape = this.currentPiece.shape.map(row => [...row]);
-        
-        // Set the ghost piece's position to match the current piece
-        ghostPiece.setPosition(this.currentPiece.getX(), this.currentPiece.getY());
-        
-        // Move ghost piece to bottom
-        while (this.board.isValidMove(ghostPiece, ghostPiece.getX(), ghostPiece.getY() + 1)) {
-            ghostPiece.moveDown();
-        }
-
-        // Draw ghost piece
-        for (let row = 0; row < ghostPiece.shape.length; row++) {
-            for (let col = 0; col < ghostPiece.shape[row].length; col++) {
-                if (ghostPiece.shape[row][col]) {
-                    this.drawBlock(ghostPiece.getX() + col, ghostPiece.getY() + row, ghostPiece.color);
+        for (let row = 0; row < shape.length; row++) {
+            for (let col = 0; col < shape[row].length; col++) {
+                if (shape[row][col] === 1) {
+                    this.drawBlock(x + col, y + row, color);
                 }
             }
         }
     }
 
-    private drawGameOver(): void {
-        this.gameOverScreen.show(this.score);
-    }
-
     private restart(): void {
         this.gameOverScreen.hide();
-
+        
+        // Stop the current game loop
+        if (this.gameLoop) {
+            this.gameLoop.stop();
+        }
+        
         // Reset game state
         this.board = new Board();
-        this.score = 0;
-        this.gameOver = false;
-        this.lastDropTime = 0;
-        this.nextPieces = [];
+        this.tetrominoGenerator = new TetrominoGenerator();
         
-        // Update score display
-        document.getElementById('score')!.textContent = 'Score: 0';
+        // Reinitialize feature manager first
+        this.featureManager = new FeatureManager();
         
-        // Initialize new pieces and start game
-        this.initializeNextPieces();
-        this.spawnPiece();
+        // Create a new game state
+        this.gameState = new GameState(
+            this.board,
+            this.tetrominoGenerator,
+            (score) => this.updateScoreDisplay(score),
+            (score) => this.handleGameOver(score),
+            (interval) => this.gameLoop.setDropInterval(interval),
+            this.featureManager
+        );
+        
+        // Initialize feature manager with the new game state
+        this.featureManager.initialize(this.gameState);
+        
+        // Create a new game loop with the new game state
+        this.gameLoop = new GameLoop(
+            this.gameState,
+            this.featureManager,
+            () => this.draw()
+        );
+        
+        // Reinitialize feature panel
+        this.featurePanel = new FeaturePanel();
+        this.featurePanel.initializeControls(this.featureManager.getAllFeatures());
+        
+        // Update the feature panel in the sidebar
+        const sidebar = this.layout.getSidebar();
+        const oldPanel = sidebar.querySelector('.feature-panel');
+        if (oldPanel) {
+            sidebar.removeChild(oldPanel);
+        }
+        sidebar.insertBefore(this.featurePanel.getElement(), sidebar.firstChild);
+        
+        // Reinitialize controls with new board
+        this.controls = new Controls(
+            this.board,
+            this.featureManager,
+            () => this.draw(),
+            () => this.hardDrop()
+        );
+        
+        // Start the game
         this.draw();
-        this.update(0);
+        this.gameLoop.start();
     }
 
     private hardDrop(): void {
-        while (this.board.isValidMove(this.currentPiece, this.currentPiece.getX(), this.currentPiece.getY() + 1)) {
-            this.currentPiece.moveDown();
-        }
-        this.board.placePiece(this.currentPiece);
-        const linesCleared = this.board.clearLines();
-        this.updateScore(linesCleared);
-        this.spawnPiece();
+        this.gameLoop.hardDrop();
     }
 } 

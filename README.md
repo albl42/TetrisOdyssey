@@ -3,7 +3,7 @@
 A modern take on the classic Tetris game, built with TypeScript and HTML5 Canvas. This project serves as a foundation for a roguelike Tetris game, combining the familiar block-dropping mechanics with roguelike elements.
 
 ## Play Online
-You can play the game online at: [https://[your-username].github.io/TetrisOdyssey](https://[your-username].github.io/TetrisOdyssey)
+You can play the game online at: [https://albl42.github.io/TetrisOdyssey](https://albl42.github.io/TetrisOdyssey)
 
 ## Features
 
@@ -38,7 +38,9 @@ TetrisOdyssey/
 ├── src/                    # TypeScript source files
 │   ├── Game.ts            # Main game logic
 │   ├── Board.ts           # Game board management
-│   └── Tetromino.ts       # Tetris piece implementation
+│   └── tetromino/
+│       ├── Tetromino.ts       # Tetris piece implementation
+│       └── TetrominoType.ts   # Tetris piece type definitions
 ├── dist/                   # Compiled JavaScript files
 ├── styles.css             # Game styling
 ├── index.html             # Main HTML file
@@ -109,5 +111,5 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 
 ## Acknowledgments
 - Inspired by the classic Tetris game
-- Built with modern web technologies
+- Built with basic web technologies
 - Special thanks to all contributors and testers

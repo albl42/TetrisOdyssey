@@ -5,31 +5,17 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Tetris Odyssey</title>
     <link rel="stylesheet" href="styles.css">
-</head>
-<body>
-    <h1>Tetris Odyssey</h1>
-    <div id="game-container">
-        <div id="gameCanvas-wrapper">
-            <canvas id="gameCanvas" width="300" height="600"></canvas>
-        </div>
-    </div>
-    <div id="score">Score: 0</div>
-    <div id="controls">
-        <p>Controls:</p>
-        <p>← → : Move left/right</p>
-        <p>↑ : Rotate</p>
-        <p>↓ : Soft drop</p>
-    </div>
-    <script type="module">
-        import { Game } from './dist/Game.js';
-        window.addEventListener('load', () => {
-            try {
-                console.log('Starting game initialization...');
-                new Game();
-            } catch (error) {
-                console.error('Error starting game:', error);
+    <script>
+        // Prevent spacebar from scrolling
+        document.addEventListener('keydown', function(event) {
+            if (event.code === 'Space') {
+                event.preventDefault();
             }
         });
     </script>
+</head>
+<body>
+    <!-- The game will be initialized here by the Game class -->
+    <script type="module" src="dist/main.js"></script>
 </body>
 </html> 

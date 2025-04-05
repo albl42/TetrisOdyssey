@@ -4,7 +4,7 @@
     "description": "A roguelike Tetris game",
     "main": "index.html",
     "scripts": {
-        "start": "tsc && serve .",
+        "start": "tsc && serve . --no-clipboard",
         "build": "tsc",
         "watch": "tsc -w"
     },
